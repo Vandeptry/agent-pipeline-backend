@@ -1,52 +1,51 @@
 # tools/weather.py
-from typing import Any
-
 import httpx
+from typing import Any
 from livekit.agents import RunContext, function_tool
 
-from utils.env import get_env
+API = "https://api.open-meteo.com/v1/forecast"
 
-WEATHER_API_BASE = get_env("WEATHER_API_BASE", "https://api.open-meteo.com/v1/forecast")
+CITY_MAP = {
+    "hanoi": (21.0278, 105.8342),
+    "ha noi": (21.0278, 105.8342),
+    "saigon": (10.8231, 106.6297),
+    "ho chi minh": (10.8231, 106.6297),
+    "danang": (16.0471, 108.2068),
+    "da nang": (16.0471, 108.2068),
+}
 
 
 @function_tool
-async def tool_weather(
-    context: RunContext,
-    location: str,
-) -> dict[str, Any]:
-    """
-    Tra cứu thời tiết hiện tại theo tên địa điểm (city).
-    Trả về JSON đơn giản cho LLM đọc.
-    """
+async def tool_weather(context: RunContext, location: str) -> dict[str, Any]:
+    q = location.strip().lower()
 
-    # Ví dụ gọi Open-Meteo demo (lat/lon cứng hoặc em custom API riêng)
-    # Ở đây anh làm stub rất đơn giản, để tránh phụ thuộc phức tạp.
-    # Em có thể thay bằng API nội bộ nhà hàng.
+    if q in CITY_MAP:
+        lat, lon = CITY_MAP[q]
+    else:
+        lat, lon = (21.0278, 105.8342)
+
     async with httpx.AsyncClient(timeout=10) as client:
-        # TODO: map location -> lat/lon thật. Tạm giả lập:
         params = {
-            "latitude": 21.0278,
-            "longitude": 105.8342,
+            "latitude": lat,
+            "longitude": lon,
             "current_weather": True,
         }
         try:
-            r = await client.get(WEATHER_API_BASE, params=params)
+            r = await client.get(API, params=params)
             r.raise_for_status()
             data = r.json()
         except Exception as e:
             return {
                 "success": False,
-                "error": f"Không lấy được thời tiết ({e})",
                 "location": location,
+                "error": str(e),
             }
 
     cw = data.get("current_weather", {})
     return {
         "success": True,
         "location": location,
-        "summary": {
-            "temperature": cw.get("temperature"),
-            "windspeed": cw.get("windspeed"),
-            "weathercode": cw.get("weathercode"),
-        },
+        "temperature": cw.get("temperature"),
+        "windspeed": cw.get("windspeed"),
+        "weathercode": cw.get("weathercode"),
     }
